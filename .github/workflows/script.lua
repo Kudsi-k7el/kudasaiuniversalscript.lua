@@ -102,23 +102,12 @@ local Window = Rayfield:CreateWindow({
         SaveKey = true,
         GrabKeyFromSite = false,
         Key = {
-            "kudasaiisgoated", -- Unlimited Time
-            "kd9x!7K#mQ92",    -- 24-Hour Expiration Key
-            "v3-hub-8491-alpha" -- 24-Hour Expiration Key
+            "kudasaiisgoated", 
+            "kd9x!7K#mQ92", 
+            "v3-hub-8491-alpha"
         }
     }
 })
-
--- Key Expiration Data Structure (Expiry Timestamps in Unix Epoch)
--- Note: "kudasaiisgoated" is absent here, meaning it never expires.
-local KeyExpirations = {
-    ["kd9x!7K#mQ92"] = 1782784800,     -- Example fixed expiry timestamp
-    ["v3-hub-8491-alpha"] = 1782784800 -- Example fixed expiry timestamp
-}
-
--- Check if user's saved/entered key is expired
-local currentKey = Rayfield.Flags.Key or "" -- Rayfield configuration storage check
--- Secondary validation logic can intercept here if needed via environment check
 
 local HomeTab        = Window:CreateTab("Home", 4483362458)
 local CombatTab      = Window:CreateTab("Combat", 4483345998)
