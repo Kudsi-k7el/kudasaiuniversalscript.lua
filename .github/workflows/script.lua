@@ -114,8 +114,7 @@ local Window = Rayfield:CreateWindow({
         GrabKeyFromSite = false,
         Key = {
             "kudasaiisgoated", 
-            "kd9x!7K#mQ92", 
-            "v3-hub-8491-alpha"
+            "kudasai-v3-freekey"
         }
     }
 })
