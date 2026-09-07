@@ -1,4 +1,15 @@
 -- ==========================================
+-- 🛡️ BROWSER & ENVIRONMENT PROTECTION
+-- ==========================================
+if not game or not pcall(function() return game:GetService("CoreGui") end) then
+    return
+end
+
+if not identifyexecutor or not pcall(function() return identifyexecutor() end) then
+    return
+end
+
+-- ==========================================
 -- 🛡️ SAFE UNLOADER & MEMORY CLEANUP
 -- ==========================================
 if getgenv().KudasaiLoaded then
