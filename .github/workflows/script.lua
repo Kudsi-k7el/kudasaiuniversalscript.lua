@@ -1,6 +1,3 @@
--- THIS IS OPEN SOURCE SCRIPT MADE BY KUDASAI
--- IF YOU WANT TO ASK ABOUT ANYTHING DM ME 
--- discord : z1.f 
 -- ==========================================
 -- 🛡️ BROWSER & ENVIRONMENT PROTECTION
 -- ==========================================
@@ -839,10 +836,36 @@ end
 -- 🔑 CUSTOM DISCORD KEY SYSTEM GUI
 -- ==========================================
 local CoreGui = game:GetService("CoreGui")
-local ValidKeys = {
-    ["kudasaiisgoated"] = true,
-    ["kudasai-v3-freekey"] = true
-}
+
+local function CheckFreeKey()
+    local filePath = "kudasai_freekey_expiry.txt"
+    local duration = 6 * 60 * 60 -- 6 hours in seconds
+    local currentTime = os.time()
+
+    if isfile and readfile and writefile then
+        -- Check if the timer file already exists
+        if isfile(filePath) then
+            local success, content = pcall(function() return readfile(filePath) end)
+            if success and content then
+                local expiryTime = tonumber(content)
+                if expiryTime then
+                    if currentTime >= expiryTime then
+                        return false, "Free Key Expired! (6h limit)"
+                    else
+                        return true, "Access Granted"
+                    end
+                end
+            end
+        end
+        
+        -- If no file exists, this is their first time using it
+        pcall(function() writefile(filePath, tostring(currentTime + duration)) end)
+        return true, "Access Granted"
+    end
+    
+    -- Fallback if executor does not support writing files
+    return true, "Access Granted"
+end
 
 local KeyScreen = Instance.new("ScreenGui")
 KeyScreen.Name = "KudasaiKeySystem"
@@ -876,7 +899,7 @@ LinkBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 LinkBox.Font = Enum.Font.Gotham
 LinkBox.TextSize = 12
 LinkBox.ClearTextOnFocus = false
-LinkBox.TextEditable = false -- THIS PREVENTS TYPING/DELETING THE LINK
+LinkBox.TextEditable = false 
 Instance.new("UICorner", LinkBox).CornerRadius = UDim.new(0, 6)
 
 local CopyBtn = Instance.new("TextButton", Frame)
@@ -918,9 +941,23 @@ SubmitBtn.TextSize = 13
 Instance.new("UICorner", SubmitBtn).CornerRadius = UDim.new(0, 6)
 
 SubmitBtn.MouseButton1Click:Connect(function()
-    if ValidKeys[KeyInput.Text] then
+    local entered = KeyInput.Text
+    
+    if entered == "kudasaiisgoated" then
         KeyScreen:Destroy()
         InitMainHub()
+    elseif entered == "kudasai-v3-freekey" then
+        local valid, msg = CheckFreeKey()
+        if valid then
+            KeyScreen:Destroy()
+            InitMainHub()
+        else
+            SubmitBtn.Text = msg -- Shows "Free Key Expired! (6h limit)"
+            SubmitBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            task.wait(2)
+            SubmitBtn.Text = "Submit Key"
+            SubmitBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 120)
+        end
     else
         SubmitBtn.Text = "Invalid Key!"
         SubmitBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
