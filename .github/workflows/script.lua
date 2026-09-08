@@ -833,136 +833,131 @@ local function InitMainHub()
 end
 
 -- ==========================================
--- 🔑 CUSTOM DISCORD KEY SYSTEM GUI
+-- 🔑 CUSTOM DISCORD KEY SYSTEM GUI & AUTO-AUTH
 -- ==========================================
 local CoreGui = game:GetService("CoreGui")
+local premiumFilePath = "kudasai_univ_premium.txt"
+local freeFilePath = "kudasai_univ_freekey.txt"
+local duration = 6 * 60 * 60 -- 6 hours in seconds
 
-local function CheckFreeKey()
-    local filePath = "kudasai_freekey_expiry.txt"
-    local duration = 6 * 60 * 60 -- 6 hours in seconds
-    local currentTime = os.time()
-
-    if isfile and readfile and writefile then
-        -- Check if the timer file already exists
-        if isfile(filePath) then
-            local success, content = pcall(function() return readfile(filePath) end)
-            if success and content then
-                local expiryTime = tonumber(content)
-                if expiryTime then
-                    if currentTime >= expiryTime then
-                        return false, "Free Key Expired! (6h limit)"
-                    else
-                        return true, "Access Granted"
-                    end
-                end
-            end
-        end
-        
-        -- If no file exists, this is their first time using it
-        pcall(function() writefile(filePath, tostring(currentTime + duration)) end)
-        return true, "Access Granted"
+local function HasActiveAuth()
+    if not (isfile and readfile) then return false end
+    
+    -- 1. Check if they have the premium lifetime auth saved
+    if isfile(premiumFilePath) then 
+        return true 
     end
     
-    -- Fallback if executor does not support writing files
-    return true, "Access Granted"
+    -- 2. Check if they have an active 6-hour free key
+    if isfile(freeFilePath) then
+        local s, content = pcall(function() return readfile(freeFilePath) end)
+        if s and content then
+            local expiry = tonumber(content)
+            if expiry and os.time() < expiry then
+                return true
+            end
+        end
+    end
+    
+    return false
 end
 
-local KeyScreen = Instance.new("ScreenGui")
-KeyScreen.Name = "KudasaiKeySystem"
-KeyScreen.ResetOnSpawn = false
-pcall(function() KeyScreen.Parent = CoreGui end)
-if not KeyScreen.Parent then KeyScreen.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+-- If they are already authenticated, skip the GUI and load directly
+if HasActiveAuth() then
+    InitMainHub()
+else
+    local KeyScreen = Instance.new("ScreenGui")
+    KeyScreen.Name = "KudasaiKeySystem"
+    KeyScreen.ResetOnSpawn = false
+    pcall(function() KeyScreen.Parent = CoreGui end)
+    if not KeyScreen.Parent then KeyScreen.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
-local Frame = Instance.new("Frame", KeyScreen)
-Frame.Size = UDim2.new(0, 360, 0, 240)
-Frame.Position = UDim2.new(0.5, -180, 0.5, -120)
-Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-Frame.BorderSizePixel = 0
+    local Frame = Instance.new("Frame", KeyScreen)
+    Frame.Size = UDim2.new(0, 360, 0, 240)
+    Frame.Position = UDim2.new(0.5, -180, 0.5, -120)
+    Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Frame.BorderSizePixel = 0
 
-local UICorner = Instance.new("UICorner", Frame)
-UICorner.CornerRadius = UDim.new(0, 8)
+    local UICorner = Instance.new("UICorner", Frame)
+    UICorner.CornerRadius = UDim.new(0, 8)
 
-local Title = Instance.new("TextLabel", Frame)
-Title.Size = UDim2.new(1, 0, 0, 35)
-Title.Text = "Kudasai Hub | Key System"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 16
-Title.Font = Enum.Font.GothamBold
-Title.BackgroundTransparency = 1
+    local Title = Instance.new("TextLabel", Frame)
+    Title.Size = UDim2.new(1, 0, 0, 35)
+    Title.Text = "Kudasai Hub | Key System"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.TextSize = 16
+    Title.Font = Enum.Font.GothamBold
+    Title.BackgroundTransparency = 1
 
-local LinkBox = Instance.new("TextBox", Frame)
-LinkBox.Size = UDim2.new(0.85, 0, 0, 30)
-LinkBox.Position = UDim2.new(0.075, 0, 0, 45)
-LinkBox.Text = "https://discord.gg/wGXEEzqxpk"
-LinkBox.TextColor3 = Color3.fromRGB(180, 180, 180)
-LinkBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-LinkBox.Font = Enum.Font.Gotham
-LinkBox.TextSize = 12
-LinkBox.ClearTextOnFocus = false
-LinkBox.TextEditable = false 
-Instance.new("UICorner", LinkBox).CornerRadius = UDim.new(0, 6)
+    local LinkBox = Instance.new("TextBox", Frame)
+    LinkBox.Size = UDim2.new(0.85, 0, 0, 30)
+    LinkBox.Position = UDim2.new(0.075, 0, 0, 45)
+    LinkBox.Text = "https://discord.gg/wGXEEzqxpk"
+    LinkBox.TextColor3 = Color3.fromRGB(180, 180, 180)
+    LinkBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    LinkBox.Font = Enum.Font.Gotham
+    LinkBox.TextSize = 12
+    LinkBox.ClearTextOnFocus = false
+    LinkBox.TextEditable = false 
+    Instance.new("UICorner", LinkBox).CornerRadius = UDim.new(0, 6)
 
-local CopyBtn = Instance.new("TextButton", Frame)
-CopyBtn.Size = UDim2.new(0.85, 0, 0, 32)
-CopyBtn.Position = UDim2.new(0.075, 0, 0, 85)
-CopyBtn.Text = "Copy Discord Link"
-CopyBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-CopyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CopyBtn.Font = Enum.Font.GothamBold
-CopyBtn.TextSize = 13
-Instance.new("UICorner", CopyBtn).CornerRadius = UDim.new(0, 6)
-
-CopyBtn.MouseButton1Click:Connect(function()
-    copyText("https://discord.gg/wGXEEzqxpk")
-    CopyBtn.Text = "Copied to Clipboard!"
-    task.wait(1.5)
+    local CopyBtn = Instance.new("TextButton", Frame)
+    CopyBtn.Size = UDim2.new(0.85, 0, 0, 32)
+    CopyBtn.Position = UDim2.new(0.075, 0, 0, 85)
     CopyBtn.Text = "Copy Discord Link"
-end)
+    CopyBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    CopyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CopyBtn.Font = Enum.Font.GothamBold
+    CopyBtn.TextSize = 13
+    Instance.new("UICorner", CopyBtn).CornerRadius = UDim.new(0, 6)
 
-local KeyInput = Instance.new("TextBox", Frame)
-KeyInput.Size = UDim2.new(0.85, 0, 0, 32)
-KeyInput.Position = UDim2.new(0.075, 0, 0, 130)
-KeyInput.PlaceholderText = "Enter key here..."
-KeyInput.Text = ""
-KeyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-KeyInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-KeyInput.Font = Enum.Font.Gotham
-KeyInput.TextSize = 13
-Instance.new("UICorner", KeyInput).CornerRadius = UDim.new(0, 6)
+    CopyBtn.MouseButton1Click:Connect(function()
+        copyText("https://discord.gg/wGXEEzqxpk")
+        CopyBtn.Text = "Copied to Clipboard!"
+        task.wait(1.5)
+        CopyBtn.Text = "Copy Discord Link"
+    end)
 
-local SubmitBtn = Instance.new("TextButton", Frame)
-SubmitBtn.Size = UDim2.new(0.85, 0, 0, 32)
-SubmitBtn.Position = UDim2.new(0.075, 0, 0, 175)
-SubmitBtn.Text = "Submit Key"
-SubmitBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 120)
-SubmitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-SubmitBtn.Font = Enum.Font.GothamBold
-SubmitBtn.TextSize = 13
-Instance.new("UICorner", SubmitBtn).CornerRadius = UDim.new(0, 6)
+    local KeyInput = Instance.new("TextBox", Frame)
+    KeyInput.Size = UDim2.new(0.85, 0, 0, 32)
+    KeyInput.Position = UDim2.new(0.075, 0, 0, 130)
+    KeyInput.PlaceholderText = "Enter key here..."
+    KeyInput.Text = ""
+    KeyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    KeyInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    KeyInput.Font = Enum.Font.Gotham
+    KeyInput.TextSize = 13
+    Instance.new("UICorner", KeyInput).CornerRadius = UDim.new(0, 6)
 
-SubmitBtn.MouseButton1Click:Connect(function()
-    local entered = KeyInput.Text
-    
-    if entered == "kudasaiisgoated" then
-        KeyScreen:Destroy()
-        InitMainHub()
-    elseif entered == "kudasai-v3-freekey" then
-        local valid, msg = CheckFreeKey()
-        if valid then
+    local SubmitBtn = Instance.new("TextButton", Frame)
+    SubmitBtn.Size = UDim2.new(0.85, 0, 0, 32)
+    SubmitBtn.Position = UDim2.new(0.075, 0, 0, 175)
+    SubmitBtn.Text = "Submit Key"
+    SubmitBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 120)
+    SubmitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SubmitBtn.Font = Enum.Font.GothamBold
+    SubmitBtn.TextSize = 13
+    Instance.new("UICorner", SubmitBtn).CornerRadius = UDim.new(0, 6)
+
+    SubmitBtn.MouseButton1Click:Connect(function()
+        local entered = KeyInput.Text
+        
+        if entered == "kudasaiisgoated" then
+            if writefile then pcall(function() writefile(premiumFilePath, "lifetime_auth") end) end
             KeyScreen:Destroy()
             InitMainHub()
+            
+        elseif entered == "kudasai-v3-freekey" then
+            if writefile then pcall(function() writefile(freeFilePath, tostring(os.time() + duration)) end) end
+            KeyScreen:Destroy()
+            InitMainHub()
+            
         else
-            SubmitBtn.Text = msg -- Shows "Free Key Expired! (6h limit)"
+            SubmitBtn.Text = "Invalid Key!"
             SubmitBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-            task.wait(2)
+            task.wait(1.5)
             SubmitBtn.Text = "Submit Key"
             SubmitBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 120)
         end
-    else
-        SubmitBtn.Text = "Invalid Key!"
-        SubmitBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        task.wait(1.5)
-        SubmitBtn.Text = "Submit Key"
-        SubmitBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 120)
-    end
-end)
+    end)
+end
