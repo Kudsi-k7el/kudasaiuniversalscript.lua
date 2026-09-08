@@ -1,0 +1,750 @@
+-- THIS IS OPEN SOURCE SCRIPT MADE BY KUDASAI
+-- IF YOU WANT TO ASK ABOUT ANYTHING DM ME 
+-- discord : z1.f 
+
+-- ==========================================
+-- 🛡️ EXECUTOR & GAME CHECK
+-- ==========================================
+if not game or not pcall(function() return game:GetService("CoreGui") end) then
+    return
+end
+
+-- Arsenal Place ID Check
+if game.PlaceId ~= 286090429 then
+    game:GetService("Players").LocalPlayer:Kick("\n[Kudasai Hub]\nThis script only works on Arsenal!")
+    return
+end
+
+-- ==========================================
+-- ⚙️ SERVICES & GLOBALS
+-- ==========================================
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TeleportService = game:GetService("TeleportService")
+local Stats = game:GetService("Stats")
+local CoreGui = game:GetService("CoreGui")
+local Lighting = game:GetService("Lighting")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local ScriptStartTime = tick()
+
+local function copyText(str)
+    if setclipboard then setclipboard(tostring(str)) elseif toclipboard then toclipboard(tostring(str)) end
+end
+
+-- ==========================================
+-- 🚀 MAIN HUB LOGIC (LOADS AFTER KEY)
+-- ==========================================
+local function InitMainHub()
+    -- State Variables
+    local Config = {
+        -- Combat
+        AimbotEnabled = false, Aiming = false, AutoReload = false,
+        Triggerbot = false, AimPart = "Head", SmoothAim = false, Smoothness = 0.5, WallCheck = false,
+        HitboxExpander = false, HitboxSize = 3, Spinbot = false, SpinSpeed = 50,
+        
+        -- Visuals
+        ESPEnabled = false, ESPBoxes = false, ESPNames = false, ESPHealth = false, ESPDistance = false, 
+        ESPChams = false, ESPTracers = false, ESPMaxDist = 1000,
+        ESPColor = Color3.fromRGB(255, 105, 180),
+        
+        -- Cosmetics & World
+        Skybox = "Default",
+        CustomWeaponSkin = false,
+        WeaponColor = Color3.fromRGB(255, 20, 147),
+        WeaponMaterial = "Neon",
+        CustomArmSkin = false,
+        ArmColor = Color3.fromRGB(255, 182, 193),
+        ArmMaterial = "ForceField",
+        
+        -- Movement
+        MovementMod = false, WalkSpeed = 25, JumpPower = 75, 
+        FlyEnabled = false, FlySpeed = 50, Bhop = false, Noclip = false
+    }
+
+    -- Custom ESP Folders
+    local ESPFolder = Instance.new("Folder")
+    ESPFolder.Name = "Arsenal_ESP_Folder"
+    local TracerGui = Instance.new("ScreenGui")
+    TracerGui.Name = "Arsenal_Tracer_Gui"
+
+    local success = pcall(function() ESPFolder.Parent = CoreGui; TracerGui.Parent = CoreGui end)
+    if not success then ESPFolder.Parent = LocalPlayer:WaitForChild("PlayerGui"); TracerGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+    -- Skybox Presets
+    local Skyboxes = {
+        ["Purple Nebula"] = {
+            Bk = "rbxassetid://159454299", Dn = "rbxassetid://159454296", Ft = "rbxassetid://159454293",
+            Lf = "rbxassetid://159454286", Rt = "rbxassetid://159454300", Up = "rbxassetid://159454288"
+        }
+    }
+
+    local function ApplySkybox(name)
+        local existingSky = Lighting:FindFirstChildOfClass("Sky")
+        if name == "Default" then
+            if existingSky and existingSky.Name == "KudasaiSky" then existingSky:Destroy() end
+            return
+        end
+
+        local data = Skyboxes[name]
+        if data then
+            local sky = existingSky or Instance.new("Sky")
+            sky.Name = "KudasaiSky"
+            sky.SkyboxBk = data.Bk
+            sky.SkyboxDn = data.Dn
+            sky.SkyboxFt = data.Ft
+            sky.SkyboxLf = data.Lf
+            sky.SkyboxRt = data.Rt
+            sky.SkyboxUp = data.Up
+            sky.Parent = Lighting
+        end
+    end
+
+    -- Utility Functions
+    local function IsEnemy(player)
+        if not player or not player.Character then return false end
+        if player == LocalPlayer then return false end
+        if LocalPlayer.Team and player.Team == LocalPlayer.Team then return false end
+        return true
+    end
+
+    local function IsVisible(targetPart)
+        if not Config.WallCheck then return true end
+        local ray = RaycastParams.new()
+        ray.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+        ray.FilterType = Enum.RaycastFilterType.Exclude
+        ray.IgnoreWater = true
+        local hit = workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000, ray)
+        if hit and hit.Instance and hit.Instance:IsDescendantOf(targetPart.Parent) then return true end
+        return false
+    end
+
+    local function GetClosestEnemy()
+        local closestPlayer, shortestDistance = nil, math.huge
+        local mousePos = UserInputService:GetMouseLocation()
+        for _, player in ipairs(Players:GetPlayers()) do
+            if IsEnemy(player) and player.Character and player.Character:FindFirstChild(Config.AimPart) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+                local targetPart = player.Character[Config.AimPart]
+                local vector, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                if onScreen and IsVisible(targetPart) then
+                    local distance = (Vector2.new(vector.X, vector.Y) - mousePos).Magnitude
+                    if distance < shortestDistance then
+                        shortestDistance, closestPlayer = distance, player
+                    end
+                end
+            end
+        end
+        return closestPlayer
+    end
+
+    local function FormatTime(seconds)
+        local mins = math.floor(seconds / 60)
+        local secs = math.floor(seconds % 60)
+        return string.format("%02d:%02d", mins, secs)
+    end
+
+    local function UnloadScript()
+        Config.MovementMod = false; Config.FlyEnabled = false; Config.ESPEnabled = false
+        Config.HitboxExpander = false; Config.Triggerbot = false; Config.AimbotEnabled = false; Config.Noclip = false
+        Config.CustomWeaponSkin = false; Config.CustomArmSkin = false
+        ApplySkybox("Default")
+
+        if ESPFolder then ESPFolder:Destroy() end
+        if TracerGui then TracerGui:Destroy() end
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 16
+            LocalPlayer.Character.Humanoid.JumpPower = 50
+            LocalPlayer.Character.Humanoid.PlatformStand = false
+            if LocalPlayer.Character.HumanoidRootPart:FindFirstChild("KudasaiFlight") then LocalPlayer.Character.HumanoidRootPart.KudasaiFlight:Destroy() end
+        end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Character and p.Character:FindFirstChild("Head") then
+                p.Character.Head.Size = Vector3.new(1.2, 1, 1)
+                p.Character.Head.Transparency = 0
+            end
+        end
+        Rayfield:Destroy()
+    end
+
+    -- Rayfield Window Setup 
+    local Window = Rayfield:CreateWindow({
+        Name = "KudasaiHub | Arsenal V3",
+        LoadingTitle = "Authenticating...",
+        LoadingSubtitle = "by kudasai",
+        ConfigurationSaving = {
+            Enabled = true,
+            FolderName = "KudasaiConfigs",
+            FileName = "ArsenalProfileBloom"
+        },
+        Theme = "Bloom",
+        KeySystem = false -- Custom key system handles this now
+    })
+
+    -- Tabs
+    local TabDashboard = Window:CreateTab("🏠 Dashboard", 4483345998)
+    local TabCombat = Window:CreateTab("🛡️ Combat", 4483362458)
+    local TabVisuals = Window:CreateTab("👁️ Visuals", 4483362458)
+    local TabCosmetics = Window:CreateTab("🎨 Cosmetics", 4483362458)
+    local TabMovement = Window:CreateTab("🏃 Movement", 4483362458)
+    local TabSettings = Window:CreateTab("⚙️ Settings", 4483362748)
+
+    ---------------------------------------------------------
+    -- DASHBOARD TAB
+    ---------------------------------------------------------
+    local DashStats = TabDashboard:CreateParagraph({Title = "Live Telemetry", Content = "Loading data..."})
+    local DashStatus = TabDashboard:CreateParagraph({Title = "Feature Status", Content = "Loading data..."})
+
+    TabDashboard:CreateSection("Server Actions")
+    TabDashboard:CreateButton({ Name = "Rejoin Current Server", Callback = function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer) end })
+    TabDashboard:CreateButton({ Name = "Server Hop (Random)", Callback = function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end })
+    TabDashboard:CreateButton({ Name = "Copy Job ID", Callback = function() copyText(game.JobId) Rayfield:Notify({Title="Copied", Content="Job ID copied to clipboard.", Duration=3}) end })
+
+    ---------------------------------------------------------
+    -- COMBAT TAB
+    ---------------------------------------------------------
+    TabCombat:CreateSection("Aimbot")
+    TabCombat:CreateToggle({ Name = "Camera Aimlock", CurrentValue = false, Flag = "AimToggle", Callback = function(V) Config.AimbotEnabled = V end })
+    TabCombat:CreateDropdown({ Name = "Aim Target Part", Options = {"Head", "UpperTorso", "LowerTorso"}, CurrentOption = {"Head"}, Flag = "AimPart", Callback = function(O) Config.AimPart = O[1] end })
+    TabCombat:CreateToggle({ Name = "Visibility Check (Wall Check)", CurrentValue = false, Flag = "WallCheck", Callback = function(V) Config.WallCheck = V end })
+    TabCombat:CreateToggle({ Name = "Smooth Aim", CurrentValue = false, Flag = "SmoothAim", Callback = function(V) Config.SmoothAim = V end })
+    TabCombat:CreateSlider({ Name = "Aim Smoothness", Range = {1, 10}, Increment = 1, CurrentValue = 5, Flag = "SmoothVal", Callback = function(V) Config.Smoothness = V / 10 end })
+
+    TabCombat:CreateSection("Automation & Anti-Aim")
+    TabCombat:CreateToggle({ Name = "Triggerbot (Auto-Shoot)", CurrentValue = false, Flag = "Trig", Callback = function(V) Config.Triggerbot = V end })
+    TabCombat:CreateToggle({ Name = "Auto-Reload", CurrentValue = false, Flag = "AutoR", Callback = function(V) Config.AutoReload = V end })
+    TabCombat:CreateToggle({ Name = "Spinbot (Anti-Aim)", CurrentValue = false, Flag = "Spin", Callback = function(V) Config.Spinbot = V end })
+    TabCombat:CreateSlider({ Name = "Spin Speed", Range = {10, 150}, Increment = 5, CurrentValue = 50, Flag = "SpinSpd", Callback = function(V) Config.SpinSpeed = V end })
+
+    TabCombat:CreateSection("Hitbox Modification")
+    TabCombat:CreateToggle({ Name = "Hitbox Expander", CurrentValue = false, Flag = "Hitbox", Callback = function(V) 
+        Config.HitboxExpander = V 
+        if not V then for _, p in ipairs(Players:GetPlayers()) do if p.Character and p.Character:FindFirstChild("Head") then p.Character.Head.Size = Vector3.new(1.2, 1, 1) p.Character.Head.Transparency = 0 end end end
+    end })
+    TabCombat:CreateSlider({ Name = "Hitbox Size", Range = {2, 10}, Increment = 0.5, CurrentValue = 3, Flag = "HitboxSz", Callback = function(V) Config.HitboxSize = V end })
+
+    UserInputService.InputBegan:Connect(function(input, gp) if not gp and input.UserInputType == Enum.UserInputType.MouseButton2 then Config.Aiming = true end end)
+    UserInputService.InputEnded:Connect(function(input, gp) if input.UserInputType == Enum.UserInputType.MouseButton2 then Config.Aiming = false end end)
+
+    ---------------------------------------------------------
+    -- VISUALS TAB
+    ---------------------------------------------------------
+    TabVisuals:CreateToggle({ Name = "Master ESP Toggle", CurrentValue = false, Flag = "ESP", Callback = function(V) Config.ESPEnabled = V if not V then ESPFolder:ClearAllChildren() TracerGui:ClearAllChildren() end end })
+    TabVisuals:CreateColorPicker({ Name = "ESP Color", Color = Color3.fromRGB(255, 105, 180), Flag = "ESPCol", Callback = function(Value) Config.ESPColor = Value end })
+    TabVisuals:CreateToggle({ Name = "Show Boxes", CurrentValue = false, Flag = "ESPBox", Callback = function(V) Config.ESPBoxes = V end })
+    TabVisuals:CreateToggle({ Name = "Show Names", CurrentValue = false, Flag = "ESPNm", Callback = function(V) Config.ESPNames = V end })
+    TabVisuals:CreateToggle({ Name = "Show Health", CurrentValue = false, Flag = "ESPHp", Callback = function(V) Config.ESPHealth = V end })
+    TabVisuals:CreateToggle({ Name = "Show Distance", CurrentValue = false, Flag = "ESPDist", Callback = function(V) Config.ESPDistance = V end })
+    TabVisuals:CreateToggle({ Name = "Show Chams", CurrentValue = false, Flag = "ESPCham", Callback = function(V) Config.ESPChams = V end })
+    TabVisuals:CreateToggle({ Name = "Show Tracers", CurrentValue = false, Flag = "ESPTrac", Callback = function(V) Config.ESPTracers = V end })
+    TabVisuals:CreateSlider({ Name = "ESP Max Distance", Range = {100, 3000}, Increment = 100, CurrentValue = 1000, Flag = "ESPMxD", Callback = function(V) Config.ESPMaxDist = V end })
+
+    ---------------------------------------------------------
+    -- COSMETICS TAB
+    ---------------------------------------------------------
+    TabCosmetics:CreateSection("Atmosphere & Skybox")
+    TabCosmetics:CreateDropdown({
+        Name = "Select Skybox Preset",
+        Options = {"Default", "Purple Nebula"},
+        CurrentOption = {"Default"},
+        Flag = "SkySelect",
+        Callback = function(Option)
+            Config.Skybox = Option[1]
+            ApplySkybox(Option[1])
+        end
+    })
+    TabCosmetics:CreateInput({
+        Name = "Custom Skybox ID",
+        PlaceholderText = "Paste any Image Asset ID...",
+        RemoveTextOnFocus = false,
+        Callback = function(Text)
+            local id = Text:gsub("%D", "")
+            if id ~= "" then
+                local existingSky = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky")
+                existingSky.Name = "KudasaiSky"
+                local fullId = "rbxassetid://" .. id
+                existingSky.SkyboxBk = fullId
+                existingSky.SkyboxDn = fullId
+                existingSky.SkyboxFt = fullId
+                existingSky.SkyboxLf = fullId
+                existingSky.SkyboxRt = fullId
+                existingSky.SkyboxUp = fullId
+                existingSky.Parent = Lighting
+            end
+        end
+    })
+
+    TabCosmetics:CreateSection("Viewmodel Weapon Chams")
+    TabCosmetics:CreateToggle({ Name = "Enable Custom Weapon Skin", CurrentValue = false, Flag = "WepSkin", Callback = function(V) Config.CustomWeaponSkin = V end })
+    TabCosmetics:CreateColorPicker({ Name = "Weapon Color", Color = Color3.fromRGB(255, 20, 147), Flag = "WepCol", Callback = function(V) Config.WeaponColor = V end })
+    TabCosmetics:CreateDropdown({ 
+        Name = "Weapon Material", Options = {"Neon", "ForceField", "Glass", "SmoothPlastic"}, 
+        CurrentOption = {"Neon"}, Flag = "WepMat", Callback = function(O) Config.WeaponMaterial = O[1] end 
+    })
+
+    TabCosmetics:CreateSection("First-Person Arm Chams")
+    TabCosmetics:CreateToggle({ Name = "Enable Arm Chams", CurrentValue = false, Flag = "ArmSkin", Callback = function(V) Config.CustomArmSkin = V end })
+    TabCosmetics:CreateColorPicker({ Name = "Arm Color", Color = Color3.fromRGB(255, 182, 193), Flag = "ArmCol", Callback = function(V) Config.ArmColor = V end })
+    TabCosmetics:CreateDropdown({ 
+        Name = "Arm Material", Options = {"ForceField", "Neon", "Glass", "SmoothPlastic"}, 
+        CurrentOption = {"ForceField"}, Flag = "ArmMat", Callback = function(O) Config.ArmMaterial = O[1] end 
+    })
+
+    ---------------------------------------------------------
+    -- MOVEMENT TAB
+    ---------------------------------------------------------
+    TabMovement:CreateSection("Overrides")
+    TabMovement:CreateToggle({ Name = "Enable Movement Modifiers", CurrentValue = false, Flag = "MoveM", Callback = function(V) 
+        Config.MovementMod = V 
+        if not V and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 16
+            LocalPlayer.Character.Humanoid.UseJumpPower = true
+            LocalPlayer.Character.Humanoid.JumpPower = 50
+        end
+    end })
+    TabMovement:CreateSlider({ Name = "WalkSpeed", Range = {16, 100}, Increment = 1, CurrentValue = 25, Flag = "WS", Callback = function(V) Config.WalkSpeed = V end })
+    TabMovement:CreateSlider({ Name = "JumpPower", Range = {50, 150}, Increment = 1, CurrentValue = 75, Flag = "JP", Callback = function(V) Config.JumpPower = V end })
+
+    TabMovement:CreateSection("Special Movement")
+    TabMovement:CreateToggle({ Name = "Bunny Hop (Auto-Jump)", CurrentValue = false, Flag = "Bhop", Callback = function(V) Config.Bhop = V end })
+    TabMovement:CreateToggle({ Name = "Noclip", CurrentValue = false, Flag = "Noc", Callback = function(V) Config.Noclip = V end })
+    TabMovement:CreateToggle({ Name = "Enable Flight", CurrentValue = false, Flag = "Fly", Callback = function(V) Config.FlyEnabled = V end })
+    TabMovement:CreateSlider({ Name = "Flight Speed", Range = {16, 150}, Increment = 1, CurrentValue = 50, Flag = "FlySp", Callback = function(V) Config.FlySpeed = V end })
+
+    ---------------------------------------------------------
+    -- SETTINGS TAB
+    ---------------------------------------------------------
+    TabSettings:CreateSection("Keybinds")
+    TabSettings:CreateKeybind({ Name = "Toggle Flight", CurrentKeybind = "F", HoldToInteract = false, Flag = "KeyFly", Callback = function() Config.FlyEnabled = not Config.FlyEnabled Rayfield:Notify({Title="Keybind", Content="Flight toggled.", Duration=2}) end })
+    TabSettings:CreateKeybind({ Name = "Toggle Noclip", CurrentKeybind = "C", HoldToInteract = false, Flag = "KeyNoC", Callback = function() Config.Noclip = not Config.Noclip Rayfield:Notify({Title="Keybind", Content="Noclip toggled.", Duration=2}) end })
+    TabSettings:CreateKeybind({ Name = "Panic / Unload Key", CurrentKeybind = "End", HoldToInteract = false, Flag = "KeyUnl", Callback = function() UnloadScript() end })
+
+    TabSettings:CreateSection("System")
+    TabSettings:CreateButton({ Name = "Unload Hub Cleanly", Callback = function() UnloadScript() end })
+
+    ---------------------------------------------------------
+    -- LOOPS
+    ---------------------------------------------------------
+    -- Triggerbot & Auto-Reload
+    task.spawn(function()
+        while task.wait(0.1) do
+            if Config.Triggerbot and LocalPlayer.Character then
+                local ray = Camera:ScreenPointToRay(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                local params = RaycastParams.new()
+                params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+                params.FilterType = Enum.RaycastFilterType.Exclude
+                local hit = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
+                if hit and hit.Instance then
+                    local model = hit.Instance:FindFirstAncestorOfClass("Model")
+                    if model and model:FindFirstChild("Humanoid") then
+                        local targetPlayer = Players:GetPlayerFromCharacter(model)
+                        if targetPlayer and IsEnemy(targetPlayer) and model.Humanoid.Health > 0 then
+                            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                            task.wait(0.02)
+                            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                            task.wait(0.15)
+                        end
+                    end
+                end
+            end
+            if Config.AutoReload and LocalPlayer.Character then
+                pcall(function()
+                    if LocalPlayer.PlayerGui.GUI.Client.Variables.ammo.Value == 0 then
+                        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.R, false, game)
+                        task.wait(0.1)
+                        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.R, false, game)
+                        task.wait(1.5)
+                    end
+                end)
+            end
+        end
+    end)
+
+    -- Main Render Loop
+    local lastTime, frameCount = tick(), 0
+    RunService.RenderStepped:Connect(function()
+        frameCount = frameCount + 1
+        local currentTime = tick()
+        if currentTime - lastTime >= 1 then
+            local ping = 0
+            pcall(function() ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
+            
+            local kills, deaths = 0, 0
+            pcall(function() 
+                if LocalPlayer:FindFirstChild("leaderstats") then
+                    kills = LocalPlayer.leaderstats:FindFirstChild("Kills") and LocalPlayer.leaderstats.Kills.Value or 0
+                    deaths = LocalPlayer.leaderstats:FindFirstChild("Deaths") and LocalPlayer.leaderstats.Deaths.Value or 0
+                end
+            end)
+            
+            local mapName = workspace:FindFirstChild("Map") and workspace.Map.Name or "Unknown"
+
+            DashStats:Set({
+                Title = "Live Telemetry",
+                Content = string.format("FPS: %d\nPing: %d ms\nPlayers: %d / %d\nSession Time: %s\nMap: %s\nKills: %d | Deaths: %d", 
+                    frameCount, ping, #Players:GetPlayers(), Players.MaxPlayers, FormatTime(currentTime - ScriptStartTime), mapName, kills, deaths)
+            })
+
+            DashStatus:Set({
+                Title = "Feature Status",
+                Content = string.format("Aimbot: %s\nESP: %s\nMovement Mods: %s\nFlight: %s\nSpinbot: %s\nNoclip: %s", 
+                    tostring(Config.AimbotEnabled), tostring(Config.ESPEnabled), tostring(Config.MovementMod), tostring(Config.FlyEnabled), tostring(Config.Spinbot), tostring(Config.Noclip))
+            })
+
+            frameCount, lastTime = 0, currentTime
+        end
+
+        -- Viewmodel Skin & Arm Customizer
+        if Config.CustomWeaponSkin or Config.CustomArmSkin then
+            local arms = Camera:FindFirstChild("Arms")
+            if arms then
+                for _, item in ipairs(arms:GetDescendants()) do
+                    if item:IsA("BasePart") or item:IsA("MeshPart") then
+                        if item.Name:lower():find("arm") or item.Name:lower():find("hand") or item.Name:lower():find("glove") then
+                            if Config.CustomArmSkin then
+                                item.Color = Config.ArmColor
+                                item.Material = Enum.Material[Config.ArmMaterial] or Enum.Material.ForceField
+                            end
+                        else
+                            if Config.CustomWeaponSkin then
+                                item.Color = Config.WeaponColor
+                                item.Material = Enum.Material[Config.WeaponMaterial] or Enum.Material.Neon
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Aimlock & Spinbot
+        if Config.AimbotEnabled and Config.Aiming then
+            local target = GetClosestEnemy()
+            if target and target.Character and target.Character:FindFirstChild(Config.AimPart) then
+                local targetPos = target.Character[Config.AimPart].Position
+                if Config.SmoothAim then
+                    Camera.CFrame = Camera.CFrame:Lerp(CFrame.lookAt(Camera.CFrame.Position, targetPos), Config.Smoothness)
+                else
+                    Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
+                end
+            end
+        end
+
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            local hrp = LocalPlayer.Character.HumanoidRootPart
+            local hum = LocalPlayer.Character.Humanoid
+
+            if Config.Spinbot then
+                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(Config.SpinSpeed), 0)
+            end
+
+            if Config.MovementMod then
+                hum.UseJumpPower = true
+                hum.WalkSpeed = Config.WalkSpeed
+                hum.JumpPower = Config.JumpPower
+            end
+
+            if Config.Bhop and hum.FloorMaterial ~= Enum.Material.Air then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+
+            if Config.Noclip then
+                for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+            end
+
+            if Config.FlyEnabled then
+                hum.PlatformStand = true
+                local bv = hrp:FindFirstChild("KudasaiFlight")
+                if not bv then
+                    bv = Instance.new("BodyVelocity")
+                    bv.Name = "KudasaiFlight"
+                    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+                    bv.Parent = hrp
+                end
+
+                local moveDir = Vector3.new(0, 0, 0)
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
+                bv.Velocity = moveDir * Config.FlySpeed
+            else
+                hum.PlatformStand = false
+                if hrp:FindFirstChild("KudasaiFlight") then hrp.KudasaiFlight:Destroy() end
+            end
+        end
+
+        -- ESP & Hitboxes
+        for _, player in ipairs(Players:GetPlayers()) do
+            if IsEnemy(player) and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Head") and player.Character.Humanoid.Health > 0 then
+                
+                if Config.HitboxExpander then
+                    player.Character.Head.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
+                    player.Character.Head.Transparency = 0.6
+                    player.Character.Head.CanCollide = false
+                else
+                    player.Character.Head.Size = Vector3.new(1.2, 1, 1)
+                    player.Character.Head.Transparency = 0
+                end
+
+                if Config.ESPEnabled then
+                    local rootPart = player.Character.HumanoidRootPart
+                    local dist = (Camera.CFrame.Position - rootPart.Position).Magnitude
+                    
+                    if dist <= Config.ESPMaxDist then
+                        local boxName = player.Name .. "_Box"
+                        local existingBox = ESPFolder:FindFirstChild(boxName)
+                        
+                        if Config.ESPBoxes or Config.ESPNames or Config.ESPHealth or Config.ESPDistance then
+                            if not existingBox then
+                                local billboard = Instance.new("BillboardGui")
+                                billboard.Name = boxName
+                                billboard.Adornee = rootPart
+                                billboard.Size = UDim2.new(4, 0, 5.5, 0)
+                                billboard.AlwaysOnTop = true
+                                
+                                local frame = Instance.new("Frame", billboard)
+                                frame.Size = UDim2.new(1, 0, 1, 0)
+                                
+                                local text = Instance.new("TextLabel", frame)
+                                text.Name = "InfoLabel"
+                                text.BackgroundTransparency = 1
+                                text.Position = UDim2.new(0, 0, -0.3, 0)
+                                text.Size = UDim2.new(1, 0, 0.3, 0)
+                                text.TextColor3 = Color3.fromRGB(255, 255, 255)
+                                text.TextStrokeTransparency = 0
+                                text.TextScaled = true
+                                
+                                billboard.Parent = ESPFolder
+                                existingBox = billboard
+                            end
+                            
+                            existingBox.Frame.BackgroundTransparency = Config.ESPBoxes and 1 or 1
+                            existingBox.Frame.BorderSizePixel = Config.ESPBoxes and 1 or 0
+                            existingBox.Frame.BorderColor3 = Config.ESPColor
+                            
+                            local infoString = ""
+                            if Config.ESPNames then infoString = infoString .. player.Name .. "\n" end
+                            if Config.ESPDistance then infoString = infoString .. "[" .. math.floor(dist) .. "s] " end
+                            if Config.ESPHealth then infoString = infoString .. "[HP: " .. math.floor(player.Character.Humanoid.Health) .. "]" end
+                            existingBox.Frame.InfoLabel.Text = infoString
+                            existingBox.Frame.InfoLabel.TextColor3 = Config.ESPColor
+                        elseif existingBox then
+                            existingBox:Destroy()
+                        end
+
+                        local chamName = player.Name .. "_Cham"
+                        local existingCham = ESPFolder:FindFirstChild(chamName)
+                        if Config.ESPChams then
+                            if not existingCham then
+                                local highlight = Instance.new("Highlight")
+                                highlight.Name = chamName
+                                highlight.Adornee = player.Character
+                                highlight.Parent = ESPFolder
+                                existingCham = highlight
+                            end
+                            existingCham.FillColor = Config.ESPColor
+                            existingCham.OutlineColor = Color3.new(1,1,1)
+                            existingCham.FillTransparency = 0.5
+                        elseif existingCham then
+                            existingCham:Destroy()
+                        end
+
+                        local tracerName = player.Name .. "_Tracer"
+                        local existingTracer = TracerGui:FindFirstChild(tracerName)
+                        if Config.ESPTracers then
+                            local rootPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position - Vector3.new(0, 3, 0))
+                            if onScreen then
+                                if not existingTracer then
+                                    existingTracer = Instance.new("Frame")
+                                    existingTracer.Name = tracerName
+                                    existingTracer.AnchorPoint = Vector2.new(0.5, 0.5)
+                                    existingTracer.BorderSizePixel = 0
+                                    existingTracer.Parent = TracerGui
+                                end
+                                local screenBottom = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                                local targetPos = Vector2.new(rootPos.X, rootPos.Y)
+                                local distance = (targetPos - screenBottom).Magnitude
+                                local angle = math.deg(math.atan2(targetPos.Y - screenBottom.Y, targetPos.X - screenBottom.X))
+
+                                existingTracer.BackgroundColor3 = Config.ESPColor
+                                existingTracer.Size = UDim2.new(0, distance, 0, 1)
+                                existingTracer.Position = UDim2.new(0, (screenBottom.X + targetPos.X) / 2, 0, (screenBottom.Y + targetPos.Y) / 2)
+                                existingTracer.Rotation = angle
+                                existingTracer.Visible = true
+                            elseif existingTracer then
+                                existingTracer.Visible = false
+                            end
+                        elseif existingTracer then
+                            existingTracer:Destroy()
+                        end
+                    else
+                        if ESPFolder:FindFirstChild(player.Name .. "_Box") then ESPFolder[player.Name .. "_Box"]:Destroy() end
+                        if ESPFolder:FindFirstChild(player.Name .. "_Cham") then ESPFolder[player.Name .. "_Cham"]:Destroy() end
+                        if TracerGui:FindFirstChild(player.Name .. "_Tracer") then TracerGui[player.Name .. "_Tracer"]:Destroy() end
+                    end
+                else
+                    if ESPFolder:FindFirstChild(player.Name .. "_Box") then ESPFolder[player.Name .. "_Box"]:Destroy() end
+                    if ESPFolder:FindFirstChild(player.Name .. "_Cham") then ESPFolder[player.Name .. "_Cham"]:Destroy() end
+                    if TracerGui:FindFirstChild(player.Name .. "_Tracer") then TracerGui[player.Name .. "_Tracer"]:Destroy() end
+                end
+            else
+                if ESPFolder:FindFirstChild(player.Name .. "_Box") then ESPFolder[player.Name .. "_Box"]:Destroy() end
+                if ESPFolder:FindFirstChild(player.Name .. "_Cham") then ESPFolder[player.Name .. "_Cham"]:Destroy() end
+                if TracerGui:FindFirstChild(player.Name .. "_Tracer") then TracerGui[player.Name .. "_Tracer"]:Destroy() end
+                if player.Character and player.Character:FindFirstChild("Head") then
+                    player.Character.Head.Size = Vector3.new(1.2, 1, 1)
+                    player.Character.Head.Transparency = 0
+                end
+            end
+        end
+    end)
+
+    Players.PlayerRemoving:Connect(function(player)
+        if ESPFolder:FindFirstChild(player.Name .. "_Box") then ESPFolder[player.Name .. "_Box"]:Destroy() end
+        if ESPFolder:FindFirstChild(player.Name .. "_Cham") then ESPFolder[player.Name .. "_Cham"]:Destroy() end
+        if TracerGui:FindFirstChild(player.Name .. "_Tracer") then TracerGui[player.Name .. "_Tracer"]:Destroy() end
+    end)
+
+    Rayfield:LoadConfiguration()
+end
+
+
+-- ==========================================
+-- 🔑 CUSTOM DISCORD KEY SYSTEM GUI
+-- ==========================================
+local function CheckFreeKey()
+    local filePath = "kudasai_arsenal_freekey.txt"
+    local duration = 6 * 60 * 60 -- 6 hours in seconds
+    local currentTime = os.time()
+
+    if isfile and readfile and writefile then
+        -- Check if the timer file already exists
+        if isfile(filePath) then
+            local success, content = pcall(function() return readfile(filePath) end)
+            if success and content then
+                local expiryTime = tonumber(content)
+                if expiryTime then
+                    if currentTime >= expiryTime then
+                        return false, "Free Key Expired! (6h limit)"
+                    else
+                        return true, "Access Granted"
+                    end
+                end
+            end
+        end
+        
+        -- If no file exists, this is their first time using it
+        pcall(function() writefile(filePath, tostring(currentTime + duration)) end)
+        return true, "Access Granted"
+    end
+    
+    -- Fallback if executor does not support writing files
+    return true, "Access Granted"
+end
+
+local KeyScreen = Instance.new("ScreenGui")
+KeyScreen.Name = "KudasaiKeySystem_Arsenal"
+KeyScreen.ResetOnSpawn = false
+pcall(function() KeyScreen.Parent = CoreGui end)
+if not KeyScreen.Parent then KeyScreen.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+local Frame = Instance.new("Frame", KeyScreen)
+Frame.Size = UDim2.new(0, 360, 0, 240)
+Frame.Position = UDim2.new(0.5, -180, 0.5, -120)
+Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Frame.BorderSizePixel = 0
+
+local UICorner = Instance.new("UICorner", Frame)
+UICorner.CornerRadius = UDim.new(0, 8)
+
+local Title = Instance.new("TextLabel", Frame)
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.Text = "Kudasai Hub | Arsenal Key"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 16
+Title.Font = Enum.Font.GothamBold
+Title.BackgroundTransparency = 1
+
+local LinkBox = Instance.new("TextBox", Frame)
+LinkBox.Size = UDim2.new(0.85, 0, 0, 30)
+LinkBox.Position = UDim2.new(0.075, 0, 0, 45)
+LinkBox.Text = "https://discord.gg/wGXEEzqxpk"
+LinkBox.TextColor3 = Color3.fromRGB(180, 180, 180)
+LinkBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+LinkBox.Font = Enum.Font.Gotham
+LinkBox.TextSize = 12
+LinkBox.ClearTextOnFocus = false
+LinkBox.TextEditable = false 
+Instance.new("UICorner", LinkBox).CornerRadius = UDim.new(0, 6)
+
+local CopyBtn = Instance.new("TextButton", Frame)
+CopyBtn.Size = UDim2.new(0.85, 0, 0, 32)
+CopyBtn.Position = UDim2.new(0.075, 0, 0, 85)
+CopyBtn.Text = "Copy Discord Link"
+CopyBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+CopyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CopyBtn.Font = Enum.Font.GothamBold
+CopyBtn.TextSize = 13
+Instance.new("UICorner", CopyBtn).CornerRadius = UDim.new(0, 6)
+
+CopyBtn.MouseButton1Click:Connect(function()
+    copyText("https://discord.gg/wGXEEzqxpk")
+    CopyBtn.Text = "Copied to Clipboard!"
+    task.wait(1.5)
+    CopyBtn.Text = "Copy Discord Link"
+end)
+
+local KeyInput = Instance.new("TextBox", Frame)
+KeyInput.Size = UDim2.new(0.85, 0, 0, 32)
+KeyInput.Position = UDim2.new(0.075, 0, 0, 130)
+KeyInput.PlaceholderText = "Enter key here..."
+KeyInput.Text = ""
+KeyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+KeyInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+KeyInput.Font = Enum.Font.Gotham
+KeyInput.TextSize = 13
+Instance.new("UICorner", KeyInput).CornerRadius = UDim.new(0, 6)
+
+local SubmitBtn = Instance.new("TextButton", Frame)
+SubmitBtn.Size = UDim2.new(0.85, 0, 0, 32)
+SubmitBtn.Position = UDim2.new(0.075, 0, 0, 175)
+SubmitBtn.Text = "Submit Key"
+SubmitBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 120)
+SubmitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SubmitBtn.Font = Enum.Font.GothamBold
+SubmitBtn.TextSize = 13
+Instance.new("UICorner", SubmitBtn).CornerRadius = UDim.new(0, 6)
+
+SubmitBtn.MouseButton1Click:Connect(function()
+    local entered = KeyInput.Text
+    
+    if entered == "kudasaiontop" then
+        KeyScreen:Destroy()
+        InitMainHub()
+    elseif entered == "free-82748275jkdf5456346udf321" then
+        local valid, msg = CheckFreeKey()
+        if valid then
+            KeyScreen:Destroy()
+            InitMainHub()
+        else
+            SubmitBtn.Text = msg -- Shows "Free Key Expired! (6h limit)"
+            SubmitBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            task.wait(2)
+            SubmitBtn.Text = "Submit Key"
+            SubmitBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 120)
+        end
+    else
+        SubmitBtn.Text = "Invalid Key!"
+        SubmitBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        task.wait(1.5)
+        SubmitBtn.Text = "Submit Key"
+        SubmitBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 120)
+    end
+end)
