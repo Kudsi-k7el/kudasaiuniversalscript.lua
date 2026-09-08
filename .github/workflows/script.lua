@@ -29,7 +29,6 @@ if getgenv().KudasaiLoaded then
         end
     end
     
-    -- Revert Hitboxes if active
     pcall(function()
         for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
             if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -40,6 +39,7 @@ if getgenv().KudasaiLoaded then
     end)
 
     pcall(function() if _G.KudasaiUI then _G.KudasaiUI:Destroy() end end)
+    pcall(function() if _G.KudasaiKeyUI then _G.KudasaiKeyUI:Destroy() end end)
     task.wait(0.2)
 end
 
@@ -64,8 +64,6 @@ if not success or not Rayfield then
     return
 end
 
-_G.KudasaiUI = Rayfield
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -84,7 +82,6 @@ local function copyText(str)
     if setclipboard then setclipboard(tostring(str)) elseif toclipboard then toclipboard(tostring(str)) end
 end
 
-local StartTime = tick()
 local NotificationsEnabled = true
 local function sendNotify(title, content, duration)
     if NotificationsEnabled then
@@ -93,7 +90,156 @@ local function sendNotify(title, content, duration)
 end
 
 -- ==========================================
--- 🎨 WINDOW INITIALIZATION WITH KEY SYSTEM
+-- 🔑 CUSTOM 6-HOUR KEY SYSTEM IMPLEMENTATION
+-- ==========================================
+local FREE_KEY_FILE = "kudasai_free_key_expiry.json"
+local SIX_HOURS = 6 * 3600
+
+local function CheckSavedFreeKey()
+    if not (readfile and writefile and isfile and delfile) then return false end
+    if isfile(FREE_KEY_FILE) then
+        local success, data = pcall(function()
+            return HttpService:JSONDecode(readfile(FREE_KEY_FILE))
+        end)
+        if success and data and data.expiryTime then
+            if os.time() < data.expiryTime then
+                return true -- Still valid within 6 hours
+            else
+                pcall(function() delfile(FREE_KEY_FILE) end) -- Expired, remove file
+            end
+        end
+    end
+    return false
+end
+
+local function SaveFreeKeyExpiry()
+    if readfile and writefile then
+        pcall(function()
+            local expiryData = { expiryTime = os.time() + SIX_HOURS }
+            writefile(FREE_KEY_FILE, HttpService:JSONEncode(expiryData))
+        end)
+    end
+end
+
+local keyValidated = false
+
+-- If a valid unexpired free key or permanent key storage isn't required every single injection, check cache:
+if CheckSavedFreeKey() then
+    keyValidated = true
+end
+
+if not keyValidated then
+    local CoreGui = game:GetService("CoreGui")
+    local KeyGui = Instance.new("ScreenGui")
+    KeyGui.Name = "KudasaiKeySystem"
+    KeyGui.Parent = CoreGui
+    _G.KudasaiKeyUI = KeyGui
+
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Size = UDim2.new(0, 420, 0, 240)
+    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -120)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Parent = KeyGui
+
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 8)
+    UICorner.Parent = MainFrame
+
+    local UIStroke = Instance.new("UIStroke")
+    UIStroke.Color = Color3.fromRGB(50, 50, 50)
+    UIStroke.Thickness = 1
+    UIStroke.Parent = MainFrame
+
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, 0, 0, 40)
+    Title.BackgroundTransparency = 1
+    Title.Text = "Kudasai Hub | Key System"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.TextSize = 18
+    Title.Font = Enum.Font.GothamBold
+    Title.Parent = MainFrame
+
+    local Subtitle = Instance.new("TextLabel")
+    Subtitle.Size = UDim2.new(1, -20, 0, 30)
+    Subtitle.Position = UDim2.new(0, 10, 0, 45)
+    Subtitle.BackgroundTransparency = 1
+    Subtitle.Text = "kudasai-v3-freekey lasts for 6 hours. kudasaiontop is permanent."
+    Subtitle.TextColor3 = Color3.fromRGB(170, 170, 170)
+    Subtitle.TextSize = 12
+    Subtitle.Font = Enum.Font.Gotham
+    Subtitle.Parent = MainFrame
+
+    local KeyBox = Instance.new("TextBox")
+    KeyBox.Size = UDim2.new(1, -40, 0, 40)
+    KeyBox.Position = UDim2.new(0, 20, 0, 85)
+    KeyBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    KeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    KeyBox.PlaceholderText = "Enter your key here..."
+    KeyBox.Text = ""
+    KeyBox.TextSize = 14
+    KeyBox.Font = Enum.Font.Gotham
+    KeyBox.Parent = MainFrame
+
+    local BoxCorner = Instance.new("UICorner")
+    BoxCorner.CornerRadius = UDim.new(0, 6)
+    BoxCorner.Parent = KeyBox
+
+    local SubmitBtn = Instance.new("TextButton")
+    SubmitBtn.Size = UDim2.new(1, -40, 0, 35)
+    SubmitBtn.Position = UDim2.new(0, 20, 0, 135)
+    SubmitBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+    SubmitBtn.Text = "Verify Key"
+    SubmitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SubmitBtn.TextSize = 14
+    SubmitBtn.Font = Enum.Font.GothamBold
+    SubmitBtn.Parent = MainFrame
+
+    local BtnCorner = Instance.new("UICorner")
+    BtnCorner.CornerRadius = UDim.new(0, 6)
+    BtnCorner.Parent = SubmitBtn
+
+    local LinkBtn = Instance.new("TextButton")
+    LinkBtn.Size = UDim2.new(1, -40, 0, 25)
+    LinkBtn.Position = UDim2.new(0, 20, 0, 180)
+    LinkBtn.BackgroundTransparency = 1
+    LinkBtn.Text = "Copy Key Link (work.ink)"
+    LinkBtn.TextColor3 = Color3.fromRGB(100, 160, 255)
+    LinkBtn.TextSize = 12
+    LinkBtn.Font = Enum.Font.Gotham
+    LinkBtn.Parent = MainFrame
+
+    LinkBtn.MouseButton1Click:Connect(function()
+        copyText("https://work.ink/2WlV/kudasai-universal-hub-v3-key")
+        LinkBtn.Text = "Link Copied to Clipboard!"
+        task.wait(2)
+        LinkBtn.Text = "Copy Key Link (work.ink)"
+    end)
+
+    local verified = false
+    SubmitBtn.MouseButton1Click:Connect(function()
+        local inputKey = KeyBox.Text
+        if inputKey == "kudasaiontop" then
+            verified = true
+            KeyGui:Destroy()
+        elseif inputKey == "kudasai-v3-freekey" then
+            SaveFreeKeyExpiry()
+            verified = true
+            KeyGui:Destroy()
+        else
+            KeyBox.Text = ""
+            KeyBox.PlaceholderText = "Invalid Key! Try Again."
+        end
+    end)
+
+    while not verified do
+        task.wait(0.1)
+        if not getgenv().KudasaiLoaded then return end
+    end
+end
+
+-- ==========================================
+-- 🎨 WINDOW INITIALIZATION (MAIN HUB)
 -- ==========================================
 local Window = Rayfield:CreateWindow({
     Name = "kudasai's universal hub v3",
@@ -104,22 +250,10 @@ local Window = Rayfield:CreateWindow({
     Theme = "Default",
     ToggleUIKeybind = "K",
     ConfigurationSaving = { Enabled = true, FolderName = "kudasai_hub_v3", FileName = "config" },
-    KeySystem = true,
-    KeySettings = {
-        Title = "Kudasai Hub | Key System",
-        Subtitle = "Get your key from:",
-        Note = "https://work.ink/2WlV/kudasai-universal-hub-v3-key",
-        FileName = "KudasaiKeyStore", 
-        SaveKey = true,
-        GrabKeyFromSite = false,
-        Key = {
-            "kudasaiisgoated", 
-            "kudasai-v3-freekey"
-        }
-    }
+    KeySystem = false -- Handled customly above for precise 6h expiration support
 })
 
-local HomeTab        = Window:CreateTab("Home", 4483362458)
+local HomeTab      = Window:CreateTab("Home", 4483362458)
 local CombatTab      = Window:CreateTab("Combat", 4483345998)
 local MovementTab    = Window:CreateTab("Movement", 4483362458)
 local VisualsTab     = Window:CreateTab("Visuals", 4483345998)
@@ -129,6 +263,8 @@ local CameraTab      = Window:CreateTab("Camera", 4483345998)
 local InteractionTab = Window:CreateTab("Interaction", 4483362748)
 local MiscTab        = Window:CreateTab("Misc", 4483362748)
 local SettingsTab    = Window:CreateTab("Settings", 4483362748)
+
+_G.KudasaiUI = Window
 
 -- ==========================================
 -- 🏠 1. HOME TAB
@@ -147,7 +283,7 @@ task.spawn(function()
         local ping = 0
         local perf = StatsService:FindFirstChild("PerformanceStats")
         if perf and perf:FindFirstChild("Ping") then ping = math.floor(perf.Ping:GetValue()) end
-        local uptime = math.floor(tick() - StartTime)
+        local uptime = math.floor(tick() - tick())
         
         pcall(function()
             fpsLabel:Set(string.format("FPS: %d", fps))
