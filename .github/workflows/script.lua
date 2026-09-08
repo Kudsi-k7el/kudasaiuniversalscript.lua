@@ -1,3 +1,6 @@
+-- THIS IS OPEN SOURCE SCRIPT MADE BY KUDASAI
+-- IF YOU WANT TO ASK ABOUT ANYTHING DM ME 
+-- discord : z1.f 
 -- ==========================================
 -- 🛡️ BROWSER & ENVIRONMENT PROTECTION
 -- ==========================================
